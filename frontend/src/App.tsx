@@ -14,6 +14,7 @@ import {
   BenchmarkResult,
   CounterfactualStrategy,
 } from './types';
+import { DEFAULT_RAW_MODULES, calculateLocalPortfolio } from './defaultData';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<number>(1);
@@ -39,7 +40,17 @@ export const App: React.FC = () => {
     budgeting_contingency_buffer_pct: 0.10,
   });
 
-  const [analyzedModules, setAnalyzedModules] = useState<AnalyzedModule[]>([]);
+  const [rawModules, setRawModules] = useState(DEFAULT_RAW_MODULES);
+  const [analyzedModules, setAnalyzedModules] = useState<AnalyzedModule[]>(() =>
+    calculateLocalPortfolio(DEFAULT_RAW_MODULES, {
+      strategic_alignment: 0.20,
+      market_potential: 0.20,
+      customer_value: 0.15,
+      technical_feasibility: 0.15,
+      financial_viability: 0.15,
+      risk_adjusted_potential: 0.15,
+    })
+  );
   const [paretoPoints, setParetoPoints] = useState<ParetoPoint[]>([]);
   const [selectedParetoId, setSelectedParetoId] = useState<string>('P-Balanced-Optimal');
   const [developers, setDevelopers] = useState<Developer[]>([]);
@@ -96,6 +107,11 @@ export const App: React.FC = () => {
 
   const handleUpdateWeights = async (newWeights: CriterionWeights) => {
     setWeights(newWeights);
+    // 1. Immediately recalculate scores & re-rank client-side for zero latency
+    const localUpdated = calculateLocalPortfolio(rawModules, newWeights);
+    setAnalyzedModules(localUpdated);
+
+    // 2. Sync with backend API if running
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
@@ -104,10 +120,12 @@ export const App: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setAnalyzedModules(data.analyzed_modules);
+        if (data.analyzed_modules && data.analyzed_modules.length > 0) {
+          setAnalyzedModules(data.analyzed_modules);
+        }
       }
     } catch (e) {
-      console.error(e);
+      // Backend offline, local state already active
     }
   };
 
