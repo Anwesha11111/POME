@@ -225,7 +225,8 @@ export function calculateLocalPortfolio(
     weights.financial_viability +
     weights.risk_adjusted_potential || 1.0;
 
-  const analyzed = modules.map((m) => {
+  // First pass: compute growth and position proxies for all modules
+  const rawAnalyzed = modules.map((m) => {
     const p_i =
       (weights.strategic_alignment / sumWeights) * m.strategic_alignment +
       (weights.market_potential / sumWeights) * m.market_potential +
@@ -239,16 +240,27 @@ export function calculateLocalPortfolio(
       (0.4 * m.strategic_alignment + 0.3 * m.customer_value + 0.3 * m.technical_feasibility).toFixed(3)
     );
 
+    return { m, p_i, growth, position };
+  });
+
+  // Calculate dynamic portfolio medians so modules are distributed across all 4 quadrants
+  const sortedGrowth = [...rawAnalyzed].map((x) => x.growth).sort((a, b) => a - b);
+  const sortedPosition = [...rawAnalyzed].map((x) => x.position).sort((a, b) => a - b);
+  const mid = Math.floor(sortedGrowth.length / 2);
+  const medianGrowth = sortedGrowth.length > 0 ? sortedGrowth[mid] : 0.78;
+  const medianPosition = sortedPosition.length > 0 ? sortedPosition[mid] : 0.85;
+
+  const analyzed = rawAnalyzed.map(({ m, p_i, growth, position }) => {
     let quadrant: 'Stars' | 'Cash Cows' | 'Question Marks' | 'Dogs';
     let action: string;
 
-    if (growth >= 0.75 && position >= 0.80) {
+    if (growth >= medianGrowth && position >= medianPosition) {
       quadrant = 'Stars';
       action = 'Protect & Prioritize (High Capital & Top Talent Allocation)';
-    } else if (growth >= 0.75 && position < 0.80) {
+    } else if (growth >= medianGrowth && position < medianPosition) {
       quadrant = 'Question Marks';
       action = 'Selective Investment / R&D Spike to Resolve Feasibility';
-    } else if (growth < 0.75 && position >= 0.80) {
+    } else if (growth < medianGrowth && position >= medianPosition) {
       quadrant = 'Cash Cows';
       action = 'Maintain Foundation with Lean Staffing';
     } else {

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { AnalyzedModule, CriterionWeights } from '../types';
+import { AnalyzedModule, CriterionWeights, SoftwareModule } from '../types';
 
 interface Tab1StrategicProps {
   modules: AnalyzedModule[];
   weights: CriterionWeights;
   onUpdateWeights: (newWeights: CriterionWeights) => void;
+  onUpdateModule?: (updatedModule: SoftwareModule) => void;
   consistencyRatio: number;
 }
 
@@ -12,9 +13,11 @@ export const Tab1Strategic: React.FC<Tab1StrategicProps> = ({
   modules,
   weights,
   onUpdateWeights,
+  onUpdateModule,
   consistencyRatio,
 }) => {
   const [selectedQuadrant, setSelectedQuadrant] = useState<string>('ALL');
+  const [editingModule, setEditingModule] = useState<SoftwareModule | null>(null);
 
   const handleWeightChange = (key: keyof CriterionWeights, val: number) => {
     onUpdateWeights({
@@ -42,8 +45,188 @@ export const Tab1Strategic: React.FC<Tab1StrategicProps> = ({
     }
   };
 
+  const handleSaveModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingModule && onUpdateModule) {
+      onUpdateModule(editingModule);
+      setEditingModule(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Module Edit Modal */}
+      {editingModule && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-sm">
+                  Edit Strategic Parameters: {editingModule.id}
+                </h3>
+                <p className="text-xs text-slate-500">{editingModule.name}</p>
+              </div>
+              <button
+                onClick={() => setEditingModule(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveModal} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Estimated Cost ($)</label>
+                  <input
+                    type="number"
+                    value={editingModule.estimated_cost}
+                    onChange={(e) =>
+                      setEditingModule({ ...editingModule, estimated_cost: parseFloat(e.target.value) || 0 })
+                    }
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Duration (Days)</label>
+                  <input
+                    type="number"
+                    value={editingModule.estimated_duration_days}
+                    onChange={(e) =>
+                      setEditingModule({ ...editingModule, estimated_duration_days: parseInt(e.target.value) || 1 })
+                    }
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t pt-3">
+                <span className="font-bold text-slate-800 block">Multicriteria Dimension Scores [0.0 - 1.0]:</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-600 block">Strategic Alignment: {editingModule.strategic_alignment}</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={editingModule.strategic_alignment}
+                      onChange={(e) =>
+                        setEditingModule({ ...editingModule, strategic_alignment: parseFloat(e.target.value) })
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-600 block">Market Potential: {editingModule.market_potential}</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={editingModule.market_potential}
+                      onChange={(e) =>
+                        setEditingModule({ ...editingModule, market_potential: parseFloat(e.target.value) })
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-600 block">Customer Value: {editingModule.customer_value}</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={editingModule.customer_value}
+                      onChange={(e) =>
+                        setEditingModule({ ...editingModule, customer_value: parseFloat(e.target.value) })
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-600 block">Technical Feasibility: {editingModule.technical_feasibility}</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={editingModule.technical_feasibility}
+                      onChange={(e) =>
+                        setEditingModule({ ...editingModule, technical_feasibility: parseFloat(e.target.value) })
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t pt-3">
+                <span className="font-bold text-slate-800 block">FMEA Risk Parameters [1 - 10]:</span>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-slate-600 block">Severity (S): {editingModule.fmea_severity}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={editingModule.fmea_severity}
+                      onChange={(e) =>
+                        setEditingModule({ ...editingModule, fmea_severity: parseInt(e.target.value) || 1 })
+                      }
+                      className="w-full border rounded p-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-600 block">Occurrence (O): {editingModule.fmea_occurrence}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={editingModule.fmea_occurrence}
+                      onChange={(e) =>
+                        setEditingModule({ ...editingModule, fmea_occurrence: parseInt(e.target.value) || 1 })
+                      }
+                      className="w-full border rounded p-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-600 block">Detection (D): {editingModule.fmea_detection}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={editingModule.fmea_detection}
+                      onChange={(e) =>
+                        setEditingModule({ ...editingModule, fmea_detection: parseInt(e.target.value) || 1 })
+                      }
+                      className="w-full border rounded p-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditingModule(null)}
+                  className="px-3 py-1.5 rounded border border-slate-300 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold shadow"
+                >
+                  Save & Recalculate
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner & AHP Weights Drawer */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* AHP Weights Controls */}
@@ -115,7 +298,12 @@ export const Tab1Strategic: React.FC<Tab1StrategicProps> = ({
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {modules.filter((m) => m.bcg_quadrant === 'Question Marks').map((m) => (
-                  <span key={m.module.id} className="text-[11px] bg-white border border-amber-300 text-amber-900 font-bold px-2 py-0.5 rounded shadow-sm">
+                  <span
+                    key={m.module.id}
+                    onClick={() => setEditingModule(m.module)}
+                    className="text-[11px] bg-white border border-amber-300 text-amber-900 font-bold px-2 py-0.5 rounded shadow-sm cursor-pointer hover:bg-amber-100 transition"
+                    title="Click to edit module parameters"
+                  >
                     {m.module.id}
                   </span>
                 ))}
@@ -131,7 +319,12 @@ export const Tab1Strategic: React.FC<Tab1StrategicProps> = ({
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {modules.filter((m) => m.bcg_quadrant === 'Stars').map((m) => (
-                  <span key={m.module.id} className="text-[11px] bg-white border border-emerald-400 text-emerald-900 font-bold px-2 py-0.5 rounded shadow-sm">
+                  <span
+                    key={m.module.id}
+                    onClick={() => setEditingModule(m.module)}
+                    className="text-[11px] bg-white border border-emerald-400 text-emerald-900 font-bold px-2 py-0.5 rounded shadow-sm cursor-pointer hover:bg-emerald-100 transition"
+                    title="Click to edit module parameters"
+                  >
                     {m.module.id}
                   </span>
                 ))}
@@ -147,7 +340,12 @@ export const Tab1Strategic: React.FC<Tab1StrategicProps> = ({
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {modules.filter((m) => m.bcg_quadrant === 'Dogs').map((m) => (
-                  <span key={m.module.id} className="text-[11px] bg-white border border-rose-300 text-rose-900 font-bold px-2 py-0.5 rounded shadow-sm">
+                  <span
+                    key={m.module.id}
+                    onClick={() => setEditingModule(m.module)}
+                    className="text-[11px] bg-white border border-rose-300 text-rose-900 font-bold px-2 py-0.5 rounded shadow-sm cursor-pointer hover:bg-rose-100 transition"
+                    title="Click to edit module parameters"
+                  >
                     {m.module.id}
                   </span>
                 ))}
@@ -163,7 +361,12 @@ export const Tab1Strategic: React.FC<Tab1StrategicProps> = ({
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {modules.filter((m) => m.bcg_quadrant === 'Cash Cows').map((m) => (
-                  <span key={m.module.id} className="text-[11px] bg-white border border-blue-400 text-blue-900 font-bold px-2 py-0.5 rounded shadow-sm">
+                  <span
+                    key={m.module.id}
+                    onClick={() => setEditingModule(m.module)}
+                    className="text-[11px] bg-white border border-blue-400 text-blue-900 font-bold px-2 py-0.5 rounded shadow-sm cursor-pointer hover:bg-blue-100 transition"
+                    title="Click to edit module parameters"
+                  >
                     {m.module.id}
                   </span>
                 ))}
@@ -197,7 +400,7 @@ export const Tab1Strategic: React.FC<Tab1StrategicProps> = ({
                 <th className="py-3 px-4 text-center">FMEA (RPN)</th>
                 <th className="py-3 px-4 text-right">Priority (P_i)</th>
                 <th className="py-3 px-4">Action Recommendation</th>
-                <th className="py-3 px-4">Indicator Badges</th>
+                <th className="py-3 px-4 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -229,15 +432,13 @@ export const Tab1Strategic: React.FC<Tab1StrategicProps> = ({
                   <td className="py-3 px-4 text-slate-600 font-medium text-[11px]">
                     {item.recommended_action}
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded">
-                        Jira: {item.module.source_origin}
-                      </span>
-                      <span className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 px-1 rounded">
-                        Proxy Tagged
-                      </span>
-                    </div>
+                  <td className="py-3 px-4 text-center">
+                    <button
+                      onClick={() => setEditingModule(item.module)}
+                      className="px-2.5 py-1 rounded bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 font-bold text-[11px] transition shadow-2xs"
+                    >
+                      ✎ Edit Parameters
+                    </button>
                   </td>
                 </tr>
               ))}

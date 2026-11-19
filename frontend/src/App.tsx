@@ -13,6 +13,7 @@ import {
   Developer,
   BenchmarkResult,
   CounterfactualStrategy,
+  SoftwareModule,
 } from './types';
 import { DEFAULT_RAW_MODULES, calculateLocalPortfolio } from './defaultData';
 
@@ -40,7 +41,7 @@ export const App: React.FC = () => {
     budgeting_contingency_buffer_pct: 0.10,
   });
 
-  const [rawModules, setRawModules] = useState(DEFAULT_RAW_MODULES);
+  const [rawModules, setRawModules] = useState<SoftwareModule[]>(DEFAULT_RAW_MODULES);
   const [analyzedModules, setAnalyzedModules] = useState<AnalyzedModule[]>(() =>
     calculateLocalPortfolio(DEFAULT_RAW_MODULES, {
       strategic_alignment: 0.20,
@@ -51,8 +52,10 @@ export const App: React.FC = () => {
       risk_adjusted_potential: 0.15,
     })
   );
+
   const [paretoPoints, setParetoPoints] = useState<ParetoPoint[]>([]);
   const [selectedParetoId, setSelectedParetoId] = useState<string>('P-Balanced-Optimal');
+  const [activeStrategyId, setActiveStrategyId] = useState<string | undefined>(undefined);
   const [developers, setDevelopers] = useState<Developer[]>([]);
   const [benchmarks, setBenchmarks] = useState<BenchmarkResult[]>([]);
   const [latexTable, setLatexTable] = useState<string>('');
@@ -107,11 +110,9 @@ export const App: React.FC = () => {
 
   const handleUpdateWeights = async (newWeights: CriterionWeights) => {
     setWeights(newWeights);
-    // 1. Immediately recalculate scores & re-rank client-side for zero latency
     const localUpdated = calculateLocalPortfolio(rawModules, newWeights);
     setAnalyzedModules(localUpdated);
 
-    // 2. Sync with backend API if running
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
@@ -125,8 +126,30 @@ export const App: React.FC = () => {
         }
       }
     } catch (e) {
-      // Backend offline, local state already active
+      // Backend offline, local calculation active
     }
+  };
+
+  const handleUpdateModule = (updatedModule: SoftwareModule) => {
+    const updatedList = rawModules.map((m) => (m.id === updatedModule.id ? updatedModule : m));
+    setRawModules(updatedList);
+    const recalculated = calculateLocalPortfolio(updatedList, weights);
+    setAnalyzedModules(recalculated);
+  };
+
+  const handleAdoptStrategy = (strat: CounterfactualStrategy) => {
+    setActiveStrategyId(strat.strategy_id);
+
+    // Update Top KPIs
+    setKpis({
+      strategicValue: (strat.strategic_value_retained_pct / 100.0) * 7.5,
+      budgetUtilizationPct: Math.round((strat.total_cost / 450000.0) * 1000) / 10,
+      scheduleFeasibility: `${strat.total_duration_days}d (${strat.is_feasible ? 'Feasible' : 'Delayed'})`,
+      avgRPN: Math.round(strat.avg_risk_rpn),
+      spi: Number((strat.total_duration_days <= 145 ? 1.05 : 0.92).toFixed(2)),
+      cpi: Number((strat.total_cost <= 330000 ? 1.03 : 0.95).toFixed(2)),
+      pmesScore: strat.pmes_score,
+    });
   };
 
   const handleSelectParetoPoint = (point: ParetoPoint) => {
@@ -212,6 +235,7 @@ export const App: React.FC = () => {
             modules={analyzedModules}
             weights={weights}
             onUpdateWeights={handleUpdateWeights}
+            onUpdateModule={handleUpdateModule}
             consistencyRatio={0.042}
           />
         )}
@@ -228,7 +252,11 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 3 && (
-          <Tab3Counterfactual onRunSimulation={handleRunCounterfactual} />
+          <Tab3Counterfactual
+            onRunSimulation={handleRunCounterfactual}
+            onAdoptStrategy={handleAdoptStrategy}
+            activeStrategyId={activeStrategyId}
+          />
         )}
 
         {activeTab === 4 && <Tab4Explainability />}

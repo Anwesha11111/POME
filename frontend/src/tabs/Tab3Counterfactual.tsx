@@ -3,13 +3,21 @@ import { CounterfactualStrategy } from '../types';
 
 interface Tab3CounterfactualProps {
   onRunSimulation: (budgetDeltaPct: number, devOutages: string[], deadlineDeltaDays: number) => Promise<CounterfactualStrategy[]>;
+  onAdoptStrategy: (strat: CounterfactualStrategy) => void;
+  activeStrategyId?: string;
 }
 
-export const Tab3Counterfactual: React.FC<Tab3CounterfactualProps> = ({ onRunSimulation }) => {
+export const Tab3Counterfactual: React.FC<Tab3CounterfactualProps> = ({
+  onRunSimulation,
+  onAdoptStrategy,
+  activeStrategyId,
+}) => {
   const [budgetCutPct, setBudgetCutPct] = useState<number>(-25);
   const [devOutage, setDevOutage] = useState<string>('DEV-01');
   const [deadlineDelta, setDeadlineDelta] = useState<number>(-15);
   const [loading, setLoading] = useState<boolean>(false);
+  const [adoptedNotification, setAdoptedNotification] = useState<string | null>(null);
+
   const [strategies, setStrategies] = useState<CounterfactualStrategy[]>([
     {
       strategy_id: 'STRAT-A',
@@ -76,8 +84,22 @@ export const Tab3Counterfactual: React.FC<Tab3CounterfactualProps> = ({ onRunSim
     }
   };
 
+  const handleDeploy = (strat: CounterfactualStrategy) => {
+    onAdoptStrategy(strat);
+    setAdoptedNotification(`✓ ${strat.name} successfully adopted! Active baseline & KPIs updated.`);
+    setTimeout(() => setAdoptedNotification(null), 4000);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {adoptedNotification && (
+        <div className="p-3 bg-emerald-600 text-white font-bold text-xs rounded-lg shadow-lg flex items-center justify-between transition-all">
+          <span>{adoptedNotification}</span>
+          <button onClick={() => setAdoptedNotification(null)} className="text-white hover:text-slate-200">✕</button>
+        </div>
+      )}
+
       {/* What-If Shock Simulator Controls */}
       <div className="bg-slate-900 text-white p-5 rounded-xl border border-slate-800 shadow-md">
         <div className="flex items-center justify-between mb-4">
@@ -156,92 +178,114 @@ export const Tab3Counterfactual: React.FC<Tab3CounterfactualProps> = ({ onRunSim
 
       {/* Side-by-Side 3-Strategy Comparison */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {strategies.map((strat, idx) => (
-          <div
-            key={strat.strategy_id}
-            className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-black text-xs uppercase tracking-wider text-slate-800">
-                  {strat.name}
-                </span>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    strat.is_feasible
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                      : 'bg-rose-100 text-rose-800 border border-rose-200'
-                  }`}
-                >
-                  {strat.is_feasible ? '✓ Feasible' : '⚠ High Risk'}
-                </span>
-              </div>
+        {strategies.map((strat) => {
+          const isAdopted = activeStrategyId === strat.strategy_id;
 
-              <p className="text-xs text-slate-500 mb-4">{strat.description}</p>
-
-              {/* Strategy Metrics Grid */}
-              <div className="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs font-medium">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Revised Cost:</span>
-                  <span className="font-mono font-bold text-slate-800">${strat.total_cost.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Duration:</span>
-                  <span className="font-mono font-bold text-slate-800">{strat.total_duration_days} Days</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Value Retained:</span>
-                  <span className="font-mono font-black text-emerald-600">{strat.strategic_value_retained_pct}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Average RPN:</span>
-                  <span className="font-mono font-bold text-slate-800">{strat.avg_risk_rpn}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">PMES Score:</span>
-                  <span className="font-mono font-extrabold text-blue-600">{strat.pmes_score.toFixed(3)}</span>
-                </div>
-              </div>
-
-              {/* Modules Retained vs Deferred */}
-              <div className="mt-4 space-y-2">
-                <div>
-                  <span className="text-[11px] font-bold text-slate-700 block">Retained Scope:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {strat.modules_retained.map((m) => (
-                      <span key={m} className="text-[9px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded font-mono font-semibold">
-                        {m}
+          return (
+            <div
+              key={strat.strategy_id}
+              className={`bg-white rounded-xl border-2 p-5 flex flex-col justify-between transition ${
+                isAdopted
+                  ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-lg'
+                  : 'border-slate-200 shadow-sm hover:shadow-md'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-black text-xs uppercase tracking-wider text-slate-800">
+                    {strat.name}
+                  </span>
+                  <div className="flex items-center space-x-1.5">
+                    {isAdopted && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-600 text-white">
+                        ✓ ACTIVE PLAN
                       </span>
-                    ))}
+                    )}
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                        strat.is_feasible
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          : 'bg-rose-100 text-rose-800 border border-rose-200'
+                      }`}
+                    >
+                      {strat.is_feasible ? '✓ Feasible' : '⚠ High Risk'}
+                    </span>
                   </div>
                 </div>
 
-                {strat.modules_deferred.length > 0 && (
+                <p className="text-xs text-slate-500 mb-4">{strat.description}</p>
+
+                {/* Strategy Metrics Grid */}
+                <div className="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs font-medium">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Revised Cost:</span>
+                    <span className="font-mono font-bold text-slate-800">${strat.total_cost.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Duration:</span>
+                    <span className="font-mono font-bold text-slate-800">{strat.total_duration_days} Days</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Value Retained:</span>
+                    <span className="font-mono font-black text-emerald-600">{strat.strategic_value_retained_pct}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Average RPN:</span>
+                    <span className="font-mono font-bold text-slate-800">{strat.avg_risk_rpn}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">PMES Score:</span>
+                    <span className="font-mono font-extrabold text-blue-600">{strat.pmes_score.toFixed(3)}</span>
+                  </div>
+                </div>
+
+                {/* Modules Retained vs Deferred */}
+                <div className="mt-4 space-y-2">
                   <div>
-                    <span className="text-[11px] font-bold text-slate-700 block">Deferred Modules:</span>
+                    <span className="text-[11px] font-bold text-slate-700 block">Retained Scope:</span>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {strat.modules_deferred.map((m) => (
-                        <span key={m} className="text-[9px] bg-rose-50 text-rose-800 border border-rose-200 px-1.5 py-0.5 rounded font-mono font-semibold">
+                      {strat.modules_retained.map((m) => (
+                        <span key={m} className="text-[9px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded font-mono font-semibold">
                           {m}
                         </span>
                       ))}
                     </div>
                   </div>
-                )}
+
+                  {strat.modules_deferred.length > 0 && (
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-700 block">Deferred Modules:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {strat.modules_deferred.map((m) => (
+                          <span key={m} className="text-[9px] bg-rose-50 text-rose-800 border border-rose-200 px-1.5 py-0.5 rounded font-mono font-semibold">
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Trade-off Verdict Footer */}
+              <div className="mt-5 pt-3 border-t border-slate-100">
+                <span className="text-[11px] text-slate-600 italic block">
+                  "{strat.tradeoff_verdict}"
+                </span>
+                <button
+                  onClick={() => handleDeploy(strat)}
+                  className={`w-full mt-3 py-1.5 rounded text-xs font-bold transition shadow ${
+                    isAdopted
+                      ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                      : 'bg-slate-800 hover:bg-slate-700 text-white'
+                  }`}
+                >
+                  {isAdopted ? '✓ Currently Deployed' : 'Adopt & Deploy Strategy →'}
+                </button>
               </div>
             </div>
-
-            {/* Trade-off Verdict Footer */}
-            <div className="mt-5 pt-3 border-t border-slate-100">
-              <span className="text-[11px] text-slate-600 italic block">
-                "{strat.tradeoff_verdict}"
-              </span>
-              <button className="w-full mt-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-bold transition shadow">
-                Adopt & Deploy Strategy →
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
