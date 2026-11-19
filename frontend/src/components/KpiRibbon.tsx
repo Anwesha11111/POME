@@ -1,5 +1,14 @@
 import React from 'react';
 
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  action: 'PLAN_LOCKED' | 'PLAN_UNLOCKED' | 'STRATEGY_DEPLOYED' | 'PARAMETER_UPDATED';
+  description: string;
+  user: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+}
+
 interface KpiRibbonProps {
   strategicValue: number;
   budgetUtilizationPct: number;
@@ -8,7 +17,10 @@ interface KpiRibbonProps {
   spi: number;
   cpi: number;
   pmesScore: number;
-  onLockAll: () => void;
+  isLocked: boolean;
+  onToggleLock: () => void;
+  onOpenAuditTrail: () => void;
+  auditCount: number;
 }
 
 export const KpiRibbon: React.FC<KpiRibbonProps> = ({
@@ -19,7 +31,10 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
   spi,
   cpi,
   pmesScore,
-  onLockAll,
+  isLocked,
+  onToggleLock,
+  onOpenAuditTrail,
+  auditCount,
 }) => {
   return (
     <div className="bg-slate-900 text-white border-b border-slate-800 shadow-lg px-6 py-3.5">
@@ -84,13 +99,29 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
           </div>
         </div>
 
-        {/* Human-in-the-loop Override Actions */}
+        {/* Human-in-the-loop Lock, Unlock & Audit Trail Actions */}
         <div className="flex items-center space-x-2">
+          {/* Toggle Lock / Unlock Button */}
           <button
-            onClick={onLockAll}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow transition active:scale-95"
+            onClick={onToggleLock}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded font-bold text-xs shadow transition active:scale-95 ${
+              isLocked
+                ? 'bg-amber-600 hover:bg-amber-500 text-white ring-2 ring-amber-400/30'
+                : 'bg-blue-600 hover:bg-blue-500 text-white'
+            }`}
           >
-            <span>Lock Plan & Audit Trail</span>
+            <span>{isLocked ? '🔓 Unlock Plan' : '🔒 Lock Plan'}</span>
+          </button>
+
+          {/* Audit Trail Drawer Trigger */}
+          <button
+            onClick={onOpenAuditTrail}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition shadow active:scale-95"
+          >
+            <span>📋 Audit Trail</span>
+            <span className="bg-slate-700 text-slate-300 px-1.5 py-0.2 rounded-full text-[10px] font-mono">
+              {auditCount}
+            </span>
           </button>
         </div>
       </div>

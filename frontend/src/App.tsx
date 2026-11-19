@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { KpiRibbon } from './components/KpiRibbon';
+import { KpiRibbon, AuditLogEntry } from './components/KpiRibbon';
 import { Tab1Strategic } from './tabs/Tab1Strategic';
 import { Tab2Policy } from './tabs/Tab2Policy';
 import { Tab3Counterfactual } from './tabs/Tab3Counterfactual';
@@ -20,6 +20,20 @@ import { DEFAULT_RAW_MODULES, calculateLocalPortfolio } from './defaultData';
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Lock status & Audit Log
+  const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [showAuditModal, setShowAuditModal] = useState<boolean>(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([
+    {
+      id: 'AUD-001',
+      timestamp: new Date().toLocaleTimeString(),
+      action: 'PARAMETER_UPDATED',
+      description: 'System initialized baseline FinTech Cloud Migration dataset.',
+      user: 'SYSTEM_ADMIN',
+      severity: 'INFO',
+    },
+  ]);
 
   // Core state
   const [weights, setWeights] = useState<CriterionWeights>({
@@ -71,6 +85,32 @@ export const App: React.FC = () => {
     pmesScore: 0.912,
   });
 
+  const logAudit = (
+    action: AuditLogEntry['action'],
+    description: string,
+    severity: AuditLogEntry['severity'] = 'INFO'
+  ) => {
+    const newEntry: AuditLogEntry = {
+      id: `AUD-${String(auditLogs.length + 1).padStart(3, '0')}`,
+      timestamp: new Date().toLocaleTimeString(),
+      action,
+      description,
+      user: 'EXEC_OFFICER (Human-in-Loop)',
+      severity,
+    };
+    setAuditLogs((prev) => [newEntry, ...prev]);
+  };
+
+  const handleToggleLock = () => {
+    if (!isLocked) {
+      setIsLocked(true);
+      logAudit('PLAN_LOCKED', 'Manager approved and locked active allocation plan against edits.', 'WARNING');
+    } else {
+      setIsLocked(false);
+      logAudit('PLAN_UNLOCKED', 'Manager unlocked allocation plan. Modifications and calibrations permitted.', 'INFO');
+    }
+  };
+
   // Fetch initial data
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -109,9 +149,14 @@ export const App: React.FC = () => {
   }, []);
 
   const handleUpdateWeights = async (newWeights: CriterionWeights) => {
+    if (isLocked) {
+      alert('Plan is currently locked by manager approval. Click "🔓 Unlock Plan" to modify weights.');
+      return;
+    }
     setWeights(newWeights);
     const localUpdated = calculateLocalPortfolio(rawModules, newWeights);
     setAnalyzedModules(localUpdated);
+    logAudit('PARAMETER_UPDATED', 'Re-calibrated AHP multi-criteria priority weights.');
 
     try {
       const res = await fetch('/api/analyze', {
@@ -131,10 +176,18 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateModule = (updatedModule: SoftwareModule) => {
+    if (isLocked) {
+      alert('Plan is currently locked. Click "🔓 Unlock Plan" to modify module parameters.');
+      return;
+    }
     const updatedList = rawModules.map((m) => (m.id === updatedModule.id ? updatedModule : m));
     setRawModules(updatedList);
     const recalculated = calculateLocalPortfolio(updatedList, weights);
     setAnalyzedModules(recalculated);
+    logAudit(
+      'PARAMETER_UPDATED',
+      `Modified parameters for ${updatedModule.id} ($${updatedModule.estimated_cost}, ${updatedModule.estimated_duration_days}d, RPN: ${updatedModule.fmea_severity * updatedModule.fmea_occurrence * updatedModule.fmea_detection}).`
+    );
   };
 
   const handleAdoptStrategy = (strat: CounterfactualStrategy) => {
@@ -150,6 +203,12 @@ export const App: React.FC = () => {
       cpi: Number((strat.total_cost <= 330000 ? 1.03 : 0.95).toFixed(2)),
       pmesScore: strat.pmes_score,
     });
+
+    logAudit(
+      'STRATEGY_DEPLOYED',
+      `Adopted ${strat.name}. Retained ${strat.modules_retained.length} modules, deferred: [${strat.modules_deferred.join(', ')}].`,
+      'CRITICAL'
+    );
   };
 
   const handleSelectParetoPoint = (point: ParetoPoint) => {
@@ -186,7 +245,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* Persistent KPI Ribbon */}
+      {/* Persistent KPI Ribbon with Lock, Unlock and Audit Trail */}
       <KpiRibbon
         strategicValue={kpis.strategicValue}
         budgetUtilizationPct={kpis.budgetUtilizationPct}
@@ -195,8 +254,77 @@ export const App: React.FC = () => {
         spi={kpis.spi}
         cpi={kpis.cpi}
         pmesScore={kpis.pmesScore}
-        onLockAll={() => alert('Plan state locked & committed to compliance audit log.')}
+        isLocked={isLocked}
+        onToggleLock={handleToggleLock}
+        onOpenAuditTrail={() => setShowAuditModal(true)}
+        auditCount={auditLogs.length}
       />
+
+      {/* Audit Trail Drawer Modal */}
+      {showAuditModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
+                  <span>📋 Immutable Governance Audit Trail</span>
+                  <span className="text-[10px] bg-blue-100 text-blue-800 font-mono px-2 py-0.5 rounded">
+                    {auditLogs.length} Entries
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Cryptographically trackable log of all Human-in-the-Loop overrides & solver actions
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAuditModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="overflow-y-auto space-y-2.5 flex-1 pr-1">
+              {auditLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs flex flex-col justify-between space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono font-bold text-slate-700">{log.id}</span>
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                          log.severity === 'CRITICAL'
+                            ? 'bg-rose-100 text-rose-800'
+                            : log.severity === 'WARNING'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {log.action}
+                      </span>
+                    </div>
+                    <span className="text-slate-400 font-mono text-[10px]">{log.timestamp}</span>
+                  </div>
+                  <p className="text-slate-800 font-medium text-[11px]">{log.description}</p>
+                  <span className="text-[10px] text-slate-400 font-mono">Actor: {log.user}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t flex justify-between items-center text-xs">
+              <span className="text-slate-500">Status: {isLocked ? '🔒 Plan Locked' : '🔓 Plan Active / Unlocked'}</span>
+              <button
+                onClick={() => setShowAuditModal(false)}
+                className="px-4 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold shadow"
+              >
+                Close Audit Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Tab Navigation Bar */}
       <div className="bg-white border-b border-slate-200 px-6 sticky top-0 z-20 shadow-xs">
